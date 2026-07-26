@@ -45,4 +45,8 @@ add_custom_command(
 
 # 3. Build shared library from generated Scheme C wrapper
 add_library(quiver_bridge SHARED ${CMAKE_BINARY_DIR}/quiver_scheme.c)
+
+/* Explicitly append header directory to the bridge target */
+target_include_directories(quiver_bridge PRIVATE ${CHICKEN_INCLUDE_DIR} src/c)
+
 target_link_libraries(quiver_bridge PRIVATE quiver_c23 ${CHICKEN_LIBRARIES})

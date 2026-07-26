@@ -5,6 +5,7 @@ on:
     branches: [ "feature/init" ]
   pull_request:
     branches: [ "feature/init" ]
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -13,13 +14,12 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # Install modern C compiler, Chicken Scheme environment, and build essentials
+      # Add libchicken-dev for chicken.h header and static/shared libraries
       - name: Install system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y gcc-13 g++-13 cmake make chicken-bin
+          sudo apt-get install -y gcc-13 g++-13 cmake make chicken-bin libchicken-dev
 
-      # Install required Chicken Scheme eggs
       - name: Install Chicken Scheme eggs
         run: |
           sudo chicken-install srfi-4 srfi-63
