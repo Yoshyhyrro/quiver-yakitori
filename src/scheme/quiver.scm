@@ -17,7 +17,7 @@ extern float c23_to_fp8(float f);
 
 ;; Instantiate a 2x2 matrix using SRFI-63 with float32 array prototype
 (define (make-matrix a b c d)
-  (let ((m (make-array (A:floC32 0.0) 2 2)))
+  (let ((m (make-array '#() 2 2)))
     (array-set! m a 0 0)
     (array-set! m b 0 1)
     (array-set! m c 1 0)
