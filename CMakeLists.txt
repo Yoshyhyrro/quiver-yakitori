@@ -9,26 +9,32 @@ set(CMAKE_C_EXTENSIONS OFF)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-# Fetch Chicken Scheme flags using chicken-config
+# Fetch Chicken Scheme flags using csc (Chicken 5 compatible)
 execute_process(
-    COMMAND chicken-config --cflags
-    OUTPUT_VARIABLE CHICKEN_CFLAGS
+    COMMAND csc -cflags
+    OUTPUT_VARIABLE CHICKEN_CFLAGS_STR
     OUTPUT_STRIP_TRAILING_WHITESPACE
 )
 
-execute_process(
-    COMMAND chicken-config --libs
-    OUTPUT_VARIABLE CHICKEN_LIBRARIES
-    OUTPUT_STRIP_TRAILING_WHITESPACE
-)
+# Convert string to CMake list format for compile options
+separate_arguments(CHICKEN_CFLAGS UNIX_COMMAND "${CHICKEN_CFLAGS_STR}")
 
 execute_process(
-    COMMAND chicken-config --include-dir
-    OUTPUT_VARIABLE CHICKEN_INCLUDE_DIR
+    COMMAND csc -ldflags
+    OUTPUT_VARIABLE CHICKEN_LDFLAGS_STR
     OUTPUT_STRIP_TRAILING_WHITESPACE
 )
+separate_arguments(CHICKEN_LDFLAGS UNIX_COMMAND "${CHICKEN_LDFLAGS_STR}")
 
-include_directories(${CHICKEN_INCLUDE_DIR} src/c)
+execute_process(
+    COMMAND csc -libs
+    OUTPUT_VARIABLE CHICKEN_LIBS_STR
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+)
+separate_arguments(CHICKEN_LIBS UNIX_COMMAND "${CHICKEN_LIBS_STR}")
+
+# Retain only src/c in the global include directory
+include_directories(src/c)
 
 # 1. Compile C23 low-precision arithmetic library
 add_library(quiver_c23 SHARED src/c/quiver_c23.c)
@@ -46,7 +52,7 @@ add_custom_command(
 # 3. Build shared library from generated Scheme C wrapper
 add_library(quiver_bridge SHARED ${CMAKE_BINARY_DIR}/quiver_scheme.c)
 
-# Explicitly append header directory to the bridge target
-target_include_directories(quiver_bridge PRIVATE ${CHICKEN_INCLUDE_DIR} src/c)
-
-target_link_libraries(quiver_bridge PRIVATE quiver_c23 ${CHICKEN_LIBRARIES})
+# Apply fetched csc flags directly to the bridge target
+target_compile_options(quiver_bridge PRIVATE ${CHICKEN_CFLAGS})
+target_link_options(quiver_bridge PRIVATE ${CHICKEN_LDFLAGS})
+target_link_libraries(quiver_bridge PRIVATE quiver_c23 ${CHICKEN_LIBS})
