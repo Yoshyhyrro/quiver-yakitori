@@ -45,3 +45,8 @@ def detect_17_cycle(mode='fp8', max_steps=35):
 
 # Run the simulation
 detect_17_cycle(mode='fp8', max_steps=35)
+
+# tests/test_quiver.py
+def test_17_cycle_detection():
+    result = detect_17_cycle(mode='fp8', max_steps=35)
+    assert result is not None  # replace with a real correctness check
