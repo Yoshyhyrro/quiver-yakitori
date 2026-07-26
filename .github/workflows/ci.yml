@@ -1,0 +1,34 @@
+name: CI Build and Test
+
+on:
+  push:
+    branches: [ "main", "master" ]
+  pull_request:
+    branches: [ "main", "master" ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # Install modern C compiler supporting C23 features
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-13 g++-13 cmake make
+
+      - name: Configure CMake
+        run: |
+          cmake -B build -DCMAKE_C_COMPILER=gcc-13
+
+      - name: Build project
+        run: |
+          cmake --build build
+
+      # Add test step if CTest or Makefile test target is configured
+      - name: Run tests
+        run: |
+          ctest --test-dir build --output-on-failure || make test
