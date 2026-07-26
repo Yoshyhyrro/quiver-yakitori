@@ -49,8 +49,8 @@ add_custom_command(
     COMMENT "Transpiling Chicken Scheme to C..."
 )
 
-# 3. Build shared library from generated Scheme C wrapper
-add_library(quiver_bridge SHARED ${CMAKE_BINARY_DIR}/quiver_scheme.c)
+# 3. Build executable from generated Scheme C wrapper
+add_executable(quiver_bridge ${CMAKE_BINARY_DIR}/quiver_scheme.c)
 
 # Apply fetched csc flags directly to the bridge target
 target_compile_options(quiver_bridge PRIVATE ${CHICKEN_CFLAGS})
