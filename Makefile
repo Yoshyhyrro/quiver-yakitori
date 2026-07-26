@@ -24,7 +24,7 @@ test-scheme: build
 # Execute unit tests for the Python and PyTorch extensions
 test-python: python-build
 	@echo "--- Running Python PyTorch Implementation Tests ---"
-	pytest tests/ -v
+	python3 test_quiver.py
 
 clean:
 	rm -rf build *.so *.egg-info build_python
