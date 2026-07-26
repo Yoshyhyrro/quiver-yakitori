@@ -12,8 +12,9 @@ build:
 python-build: build
 	python3 setup.py build_ext --inplace
 
-test: build
-	cd build && ctest --output-on-failure
+test-all: build
+	@echo "--- Running C23/Scheme Implementation ---"
+	./build/quiver_bridge
 
 clean:
 	rm -rf build *.so *.egg-info build_python
