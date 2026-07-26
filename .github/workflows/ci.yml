@@ -17,7 +17,7 @@ jobs:
       - name: Install system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y gcc-13 g++-13 cmake make chicken-bin chicken-install
+          sudo apt-get install -y gcc-13 g++-13 cmake make chicken-bin
 
       # Install required Chicken Scheme eggs
       - name: Install Chicken Scheme eggs
