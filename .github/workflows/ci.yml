@@ -59,4 +59,4 @@ jobs:
       # Run Python/PyTorch test suite
       - name: Run Python PyTorch simulation test
         run: |
-          python test_pytorch.py
+          python test_quiver.py
