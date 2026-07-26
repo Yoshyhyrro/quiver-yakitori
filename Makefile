@@ -12,9 +12,19 @@ build:
 python-build: build
 	python3 setup.py build_ext --inplace
 
-test-all: build
+# Execute cross-validation suite across all language boundaries
+test-all: build test-scheme test-python
+	@echo "--- All integration tests completed successfully ---"
+
+# Execute unit tests for the Scheme and C bridge implementation
+test-scheme: build
 	@echo "--- Running C23/Scheme Implementation ---"
 	./build/quiver_bridge
+
+# Execute unit tests for the Python and PyTorch extensions
+test-python: python-build
+	@echo "--- Running Python PyTorch Implementation Tests ---"
+	pytest tests/ -v
 
 clean:
 	rm -rf build *.so *.egg-info build_python
