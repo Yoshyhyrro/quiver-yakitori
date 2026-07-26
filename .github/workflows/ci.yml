@@ -13,11 +13,16 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # Install modern C compiler and Chicken Scheme environment
-      - name: Install dependencies
+      # Install modern C compiler, Chicken Scheme environment, and build essentials
+      - name: Install system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y gcc-13 g++-13 cmake make chicken-bin
+          sudo apt-get install -y gcc-13 g++-13 cmake make chicken-bin chicken-install
+
+      # Install required Chicken Scheme eggs
+      - name: Install Chicken Scheme eggs
+        run: |
+          sudo chicken-install srfi-4 srfi-63
 
       - name: Configure CMake
         run: |
@@ -27,7 +32,6 @@ jobs:
         run: |
           cmake --build build
 
-      # Add test execution steps here if needed
       - name: Run tests
         run: |
           ctest --test-dir build --output-on-failure || true
