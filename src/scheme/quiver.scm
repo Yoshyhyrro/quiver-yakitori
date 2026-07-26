@@ -15,9 +15,9 @@ extern float c23_to_fp8(float f);
 (define q-bf16 (foreign-lambda float "c23_to_bf16" float))
 (define q-fp8  (foreign-lambda float "c23_to_fp8" float))
 
-;; Instantiate a 2x2 matrix using SRFI-63 with an initial f32vector prototype
+;; Instantiate a 2x2 matrix using SRFI-63 with explicit dimension vector
 (define (make-matrix a b c d)
-  (let ((m (make-array (f32vector 0.0) 2 2)))
+  (let ((m (make-array (f32vector 0.0) '#(2 2))))
     (array-set! m a 0 0)
     (array-set! m b 0 1)
     (array-set! m c 1 0)
