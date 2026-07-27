@@ -51,12 +51,9 @@ jobs:
         run: |
           python setup.py build_ext --inplace
 
-      # Run C23/Scheme library test via Makefile target
-      - name: Run Scheme integration test
+      # Run the full cross-language integration suite (Scheme + pytest)
+      # via the Makefile. test-all already runs `pytest tests/ -v`
+      # (see test-python target), so no separate Python step is needed here.
+      - name: Run integration test suite
         run: |
           make test-all
-
-      # Run Python/PyTorch test suite
-      - name: Run Python PyTorch simulation test
-        run: |
-          python tests/test_quiver.py
