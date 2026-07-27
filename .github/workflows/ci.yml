@@ -2,9 +2,9 @@ name: CI Build and Test
 
 on:
   push:
-    branches: [ "main" ]
+    branches: [ "feature/Newton-Okounkov" ]
   pull_request:
-    branches: [ "main" ]
+    branches: [ "feature/Newton-Okounkov" ]
 
 jobs:
   build:
