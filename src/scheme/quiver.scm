@@ -101,7 +101,73 @@ extern float c23_to_fp8(float f);
                 (quiver-multiply-stuffle  stuffle-state  m-init mode)
                 (+ step 1))))))
 
-;; Setup for the initial Jordan quiver
+;; ------------------------------------------------------------------
+;; Vendored constants (NOT a live chicken-install dependency)
+;;
+;; These two values are copied from Yoshyhyrro/hatsu-yakitori's
+;; core/machine_constants.scm. As of release v0.4.8 that egg is not
+;; actually chicken-install-able: core.setup uses an invalid CHICKEN5
+;; .egg structure (multiple top-level forms instead of one wrapping
+;; list, plus a "name" key CHICKEN5 doesn't recognize, plus CRLF line
+;; endings), and machine_constants.scm imports srfi-1 without
+;; declaring it in the egg's dependencies. Both are reproducible
+;; independently of network access, so they are not sandbox-specific.
+;; Vendoring avoids coupling quiver-yakitori's CI to that repo's
+;; release hygiene; revisit as a real egg dependency once fixed.
+;; ------------------------------------------------------------------
+
+(define machine-epsilon (expt 2.0 -52))
+(define default-tolerance 1e-10)
+
+;; 1 ULP of the E4M3 grid at a given magnitude (normal range only;
+;; this implementation has no true subnormals -- see quiver_c23.c).
+(define (fp8-e4m3-ulp magnitude)
+  (if (= magnitude 0.0)
+      (expt 2.0 -6)
+      (let ((exponent (inexact->exact (floor (/ (log (abs magnitude)) (log 2.0))))))
+        (expt 2.0 (- exponent 3)))))
+
+;; ------------------------------------------------------------------
+;; Constant harvesting: run the double-shuffle experiment and reduce
+;; it to a small set of scalar invariants, suitable for logging and
+;; later cross-referencing against independently-derived constants
+;; (e.g. on the Lean side of the project). Two states are considered
+;; to "agree" at a step if their difference is within
+;; default-tolerance, rather than requiring bit-exact equality.
+;; ------------------------------------------------------------------
+
+(define (harvest-constants m-init max-steps mode)
+  (let loop ((shuffle-state m-init)
+             (stuffle-state m-init)
+             (step 0)
+             (onset #f)            ; first step where diff > default-tolerance
+             (max-diff 0.0)
+             (max-diff-steps '())  ; steps achieving max-diff
+             (agree-count 0))
+    (if (>= step max-steps)
+        (list (cons 'mode mode)
+              (cons 'max-steps max-steps)
+              (cons 'onset-step onset)
+              (cons 'agree-count agree-count)
+              (cons 'max-diff max-diff)
+              (cons 'max-diff-steps (reverse max-diff-steps))
+              (cons 'max-diff-ulp-ratio (/ max-diff (fp8-e4m3-ulp 1.0))))
+        (let* ((rs (mref shuffle-state 0 0))
+               (rt (mref stuffle-state 0 0))
+               (d  (abs (- rs rt)))
+               (agrees? (< d default-tolerance)))
+          (loop (quiver-multiply-shuffle shuffle-state m-init mode)
+                (quiver-multiply-stuffle  stuffle-state  m-init mode)
+                (+ step 1)
+                (or onset (and (not agrees?) step))
+                (max max-diff d)
+                (cond ((> d max-diff) (list step))
+                      ((= d max-diff) (cons step max-diff-steps))
+                      (else max-diff-steps))
+                (+ agree-count (if agrees? 1 0)))))))
+
+(define (print-harvest h)
+  (for-each (lambda (kv) (printf "~A: ~A\n" (car kv) (cdr kv))) h))
 (define theta (/ (* 2.0 3.141592653589793) 17.0))
 (define cos-t (cos theta))
 (define sin-t (sin theta))
@@ -115,3 +181,7 @@ extern float c23_to_fp8(float f);
 
 (newline)
 (observe-double-shuffle register-node-17 20 'fp8)
+
+(newline)
+(printf "=== Harvested constants (mode = fp8) ===\n")
+(print-harvest (harvest-constants register-node-17 20 'fp8))
