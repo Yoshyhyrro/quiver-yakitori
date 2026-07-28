@@ -20,31 +20,94 @@ extern float c23_to_fp8(float f);
         (else (lambda (x) x))))
 
 ;; ------------------------------------------------------------------
-;; 2x2 matrix, stored as a flat f32vector: #(a b c d) = [[a b] [c d]]
+;; NxN matrix engine, stored as a record wrapping a flat row-major
+;; f32vector: dim n, data of length n*n, entry (r,c) at r*n+c.
 ;;
-;; This replaces the previous SRFI-63 array representation. f32vector
-;; is a CHICKEN core extension (part of SRFI-4, bundled with the base
-;; install) so it needs no external egg fetch, and it guarantees
-;; genuine IEEE-754 float32 storage -- which the old '#() prototype
-;; (a generic, untyped SRFI-63 prototype) did not actually pin down.
+;; This generalizes the previous hardcoded-2x2 representation (itself
+;; a replacement for the old SRFI-63 array, which needed an external
+;; egg fetch and did not actually guarantee float32 storage). f32vector
+;; remains a CHICKEN core extension, no external egg needed.
+;;
+;; Division of labor in this project: quiver_c23.c owns the scalar
+;; quantization primitive (what a single float rounds to under
+;; FP8/BF16); this Scheme layer owns matrix algebra over that
+;; primitive -- construction, raw and quantized products, and
+;; equality/distance checks used to test algebraic identities.
+;; ------------------------------------------------------------------
+
+(define-record-type matrix
+  (make-matrix-raw dim data)
+  matrix?
+  (dim matrix-dim)
+  (data matrix-data))
+
+(define (matrix-ref m row col)
+  (f32vector-ref (matrix-data m) (+ (* row (matrix-dim m)) col)))
+
+;; Build an n x n matrix from proc : row col -> value
+(define (matrix-build n proc)
+  (let ((data (make-f32vector (* n n) 0.0)))
+    (do ((r 0 (+ r 1))) ((= r n))
+      (do ((c 0 (+ c 1))) ((= c n))
+        (f32vector-set! data (+ (* r n) c) (proc r c))))
+    (make-matrix-raw n data)))
+
+(define (matrix-identity n)
+  (matrix-build n (lambda (r c) (if (= r c) 1.0 0.0))))
+
+;; E_ij: 1 at (i,j), 0 elsewhere -- the elementary matrices used by
+;; HatsuYakitori.HeisenbergCarabiner.heisenberg_matrix_witness.
+(define (matrix-elementary n i j)
+  (matrix-build n (lambda (r c) (if (and (= r i) (= c j)) 1.0 0.0))))
+
+(define (matrix-add m1 m2)
+  (matrix-build (matrix-dim m1) (lambda (r c) (+ (matrix-ref m1 r c) (matrix-ref m2 r c)))))
+
+(define (matrix-sub m1 m2)
+  (matrix-build (matrix-dim m1) (lambda (r c) (- (matrix-ref m1 r c) (matrix-ref m2 r c)))))
+
+;; Raw (full-precision) matrix product; no quantization applied.
+(define (matrix-mul-raw m1 m2)
+  (let ((n (matrix-dim m1)))
+    (matrix-build n
+      (lambda (r c)
+        (let loop ((k 0) (acc 0.0))
+          (if (= k n) acc
+              (loop (+ k 1) (+ acc (* (matrix-ref m1 r k) (matrix-ref m2 k c))))))))))
+
+(define (matrix-map-q f m)
+  (matrix-build (matrix-dim m) (lambda (r c) (f (matrix-ref m r c)))))
+
+;; Quantize-after-multiply: Q(m1 @ m2)
+(define (matrix-mul-q m1 m2 mode)
+  (matrix-map-q (quantizer-for mode) (matrix-mul-raw m1 m2)))
+
+(define (matrix-max-abs-diff m1 m2)
+  (let ((n (matrix-dim m1)))
+    (let loop-r ((r 0) (best 0.0))
+      (if (= r n) best
+          (loop-r (+ r 1)
+                  (let loop-c ((c 0) (best2 best))
+                    (if (= c n) best2
+                        (loop-c (+ c 1)
+                                (max best2 (abs (- (matrix-ref m1 r c) (matrix-ref m2 r c)))))))))))) 
+
+;; ------------------------------------------------------------------
+;; Backward-compatible 2x2 interface. Everything below (detect-17-cycle,
+;; observe-double-shuffle, harvest-constants) was written against this
+;; API and is otherwise unchanged.
 ;; ------------------------------------------------------------------
 
 (define (make-matrix a b c d)
-  (f32vector a b c d))
+  (matrix-build 2 (lambda (r c*)
+                     (cond ((and (= r 0) (= c* 0)) a)
+                           ((and (= r 0) (= c* 1)) b)
+                           ((and (= r 1) (= c* 0)) c)
+                           (else d)))))
 
-(define (mref m row col) (f32vector-ref m (+ (* row 2) col)))
-
-(define (matrix-map f m)
-  (make-matrix (f (mref m 0 0)) (f (mref m 0 1))
-               (f (mref m 1 0)) (f (mref m 1 1))))
-
-;; Raw (full-precision) 2x2 matrix product; no quantization applied.
-(define (matrix-multiply-raw m1 m2)
-  (make-matrix
-   (+ (* (mref m1 0 0) (mref m2 0 0)) (* (mref m1 0 1) (mref m2 1 0)))
-   (+ (* (mref m1 0 0) (mref m2 0 1)) (* (mref m1 0 1) (mref m2 1 1)))
-   (+ (* (mref m1 1 0) (mref m2 0 0)) (* (mref m1 1 1) (mref m2 1 0)))
-   (+ (* (mref m1 1 0) (mref m2 0 1)) (* (mref m1 1 1) (mref m2 1 1)))))
+(define mref matrix-ref)
+(define matrix-map matrix-map-q)
+(define matrix-multiply-raw matrix-mul-raw)
 
 ;; ------------------------------------------------------------------
 ;; Two composition orders ("double shuffle" experiment)
@@ -185,3 +248,48 @@ extern float c23_to_fp8(float f);
 (newline)
 (printf "=== Harvested constants (mode = fp8) ===\n")
 (print-harvest (harvest-constants register-node-17 20 'fp8))
+
+;; ------------------------------------------------------------------
+;; Heisenberg-relation bug oracle.
+;;
+;; HatsuYakitori.HeisenbergCarabiner.heisenberg_relation (Lean, proved,
+;; 0 sorry) states: for any ring R and f, g : Mat(n,R) with f*z = g*z = 0
+;; where z = [f,g] = fg - gf,
+;;     (1+f)(1+g) = (1+g)(1+f)(1+z)
+;; heisenberg_matrix_witness gives a concrete instance in Mat(3,R):
+;; f = E01, g = E12, satisfying the hypothesis, with z = E02.
+;;
+;; Every entry touched by this computation is exactly 0 or 1 --
+;; exactly representable in float32, BF16, and FP8 alike, so there is
+;; no rounding ambiguity anywhere. That makes this an unusually clean
+;; bug oracle: the Lean proof guarantees max|LHS-RHS| = 0 exactly,
+;; regardless of quantization mode. Any nonzero result under ANY mode
+;; is therefore necessarily an implementation bug in matrix-mul-raw /
+;; matrix-mul-q / the quantizer binding -- never "expected quantization
+;; noise" (contrast with observe-double-shuffle above, where nonzero
+;; divergence is the expected, interesting result).
+;; ------------------------------------------------------------------
+
+(define (check-heisenberg-relation mode)
+  (let* ((n 3)
+         (id (matrix-identity n))
+         (f  (matrix-elementary n 0 1))
+         (g  (matrix-elementary n 1 2))
+         (z  (matrix-sub (matrix-mul-raw f g) (matrix-mul-raw g f)))
+         (lhs (matrix-mul-q (matrix-add id f) (matrix-add id g) mode))
+         (rhs (matrix-mul-q (matrix-mul-q (matrix-add id g) (matrix-add id f) mode
+                             (matrix-add id z)
+                             mode)))
+         (max-diff (matrix-max-abs-diff lhs rhs)))
+    (printf "Heisenberg relation (mode = ~A): max|LHS-RHS| = ~A => ~A\n"
+            mode max-diff
+            (if (= max-diff 0.0)
+                "OK (matches Lean proof exactly)"
+                "BUG: Lean proof guarantees exact equality here"))
+    max-diff))
+
+(newline)
+(printf "=== Heisenberg relation bug oracle ===\n")
+(check-heisenberg-relation 'raw)
+(check-heisenberg-relation 'bf16)
+(check-heisenberg-relation 'fp8)
