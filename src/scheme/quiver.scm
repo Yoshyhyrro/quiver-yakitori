@@ -277,9 +277,9 @@ extern float c23_to_fp8(float f);
          (g  (matrix-elementary n 1 2))
          (z  (matrix-sub (matrix-mul-raw f g) (matrix-mul-raw g f)))
          (lhs (matrix-mul-q (matrix-add id f) (matrix-add id g) mode))
-         (rhs (matrix-mul-q (matrix-mul-q (matrix-add id g) (matrix-add id f) mode
+         (rhs (matrix-mul-q (matrix-mul-q (matrix-add id g) (matrix-add id f) mode)
                              (matrix-add id z)
-                             mode)))
+                             mode))
          (max-diff (matrix-max-abs-diff lhs rhs)))
     (printf "Heisenberg relation (mode = ~A): max|LHS-RHS| = ~A => ~A\n"
             mode max-diff
