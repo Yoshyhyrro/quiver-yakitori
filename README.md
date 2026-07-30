@@ -45,7 +45,22 @@ writing.
 | Two composition orders — "shuffle" $Q(Q(A)Q(B))$ vs "stuffle" $Q(A@B)$ — diverge under FP8, and agree exactly under full precision | `observe-double-shuffle` in `src/scheme/quiver.scm` |
 | For the current 17-cycle run (`mode='fp8'`, 20 steps): onset of divergence at step 3, exact agreement at 9/20 steps, max divergence 0.125, occurring as a 4-step plateau at steps 13-16 | `harvest-constants`, reproduced bit-for-bit across two independent machines |
 | Max divergence (0.125) equals exactly 1 ULP of the E4M3 grid at magnitude ~1 — this follows directly from the format definition (3 mantissa bits), not from numerology | verified analytically + numerically |
-| `quiver_c23.c`'s FP8 implementation silently matches the "with-Infinity" E4M3 variant (max finite value 240), **not** `float8_e4m3fn` (max 448) used elsewhere in this project. The two are indistinguishable within the 17-cycle's natural value range ($\lvert x\rvert \lesssim 1.125$) but diverge outside it (240 vs. 448 vs. Inf vs. NaN overflow policy) | boundary probe against `ml_dtypes.float8_e4m3` / `float8_e4m3fn`; not yet reconciled |
+| `quiver_c23.c`'s FP8 implementation silently matches the "with-Infinity" E4M3 variant (max finite value 240), **not** `float8_e4m3fn` (max 448) used elsewhere in this project. The two are indistinguishable within the 17-cycle's natural value range ($\lvert x\rvert \lesssim 1.125$) but diverge outside it (240 vs. 448 vs. Inf vs. NaN overflow policy) | boundary probe against `ml_dtypes.float8_e4m3` / `float8_e4m3fn`; **not yet reconciled** |
+| The matrix layer generalizes to arbitrary N×N (record type over a flat row-major `f32vector`), with the previous 2×2 register-machine API preserved as a thin backward-compatible alias layer | `src/scheme/quiver.scm`, all prior 17-cycle/shuffle/harvest numbers reproduce unchanged after the refactor |
+| `HatsuYakitori.HeisenbergCarabiner.heisenberg_relation` (Lean, proved, 0 `sorry`) gives an identity, $(1+f)(1+g)=(1+g)(1+f)(1+z)$ for $f,g$ with $fz=gz=0$, whose matrix witness ($f=E_{01}, g=E_{12}$ in $\mathrm{Mat}(3,\cdot)$) has every entry exactly 0 or 1 — exactly representable under any float format. This makes it a zero-rounding-ambiguity bug oracle: any nonzero LHS−RHS under *any* quantization mode is necessarily an implementation bug, never expected quantization noise. Confirmed passing (`max\|LHS-RHS\| = 0.0`) under raw/BF16/FP8, and confirmed to actually catch bugs by deliberately injecting a transposed-index matmul bug and observing it get flagged (`max\|LHS-RHS\| = 1.0`) under all three modes | `check-heisenberg-relation` in `src/scheme/quiver.scm` |
+| A real build-vs-source discrepancy (one misplaced closing paren, flattening a nested 3-arg call into one 5-arg call) was found not by code review but by trying to reproduce the reported CI failure locally and failing to — which correctly pointed at "your checked-in file differs from what was reviewed" rather than a tooling bug | `feature/Newton-Okounkov`, fixed |
+
+## Comparison targets tried (individuals)
+
+| Target | Independent implementation? | Result |
+|---|---|---|
+| PyTorch (ATen, CPU) `float8_e4m3fn` / `bfloat16` | yes | reference baseline |
+| `ml_dtypes` (Google, pip) `float8_e4m3fn` / `bfloat16` | yes, separate codebase from ATen | matches PyTorch exactly |
+| Own `quiver_c23.c` (C23, RNE) | yes | matches both of the above, within the 17-cycle's natural value range; diverges at range boundary (240 vs 448, see above) |
+| TensorFlow 2.21 `tf.bfloat16` | **no** — bit-for-bit identical to `ml_dtypes.bfloat16` across all 20 steps of the 17-cycle, indicating a shared underlying implementation | tested, but does not count as an independent data point |
+| TensorFlow FP8 | n/a | TF 2.21 exposes no `float8_*` dtype at all (checked `tf.dtypes` and `tf.experimental`) |
+| nvfortran / CUDA `__nv_fp8_e4m3` | not evaluated | no GPU and no network path to the NVIDIA SDK in this environment; likely shares the same underlying conversion routine as PyTorch-on-GPU anyway, so of questionable independence even if it could be tested |
+| IBM HFP (hexadecimal floating point, base-16, wobbling precision) | would be genuinely independent (different base, no hidden bit) | proposed, not yet implemented — see Open questions |
 
 ## What is NOT established (hypothesis / analogy only)
 
@@ -70,6 +85,37 @@ proof within this project:
   additional rigor — the "full version" is, by its own admission, also
   simplified.
 
+## Open questions (next steps, not yet decided)
+
+- **240 vs 448.** Should `quiver_c23.c` be changed to match `float8_e4m3fn`
+  (max 448, the variant used by PyTorch/`ml_dtypes` and referenced
+  everywhere else in this project), or is the current "with-Infinity"
+  E4M3 (max 240) intentional? Until decided, treat any experiment that
+  approaches $\lvert x\rvert \gtrsim 200$ as suspect.
+- **HFP (IBM hexadecimal floating point).** Base-16, no hidden bit,
+  "wobbling" effective precision (21–24 bits depending on the leading hex
+  digit) — every comparison target tried so far has been IEEE-754/base-2.
+  Not yet built.
+- **Fermat-prime periodicity.** Tested whether rotation by $2\pi/n$ shows
+  distinguishable FP8/BF16 quantization behavior for Fermat-prime $n$ vs.
+  non-Fermat-prime $n$. Result so far: suggestive but inconclusive (2
+  usable data points, $n=5,17$; larger Fermat primes are unreachable —
+  FP8/BF16 grids round $\cos(2\pi/257)$ to exactly 1.0 before anything can
+  happen). Full writeup and both the supporting and disconfirming results:
+  see [Discussions](../../discussions) (prediction logs live there now,
+  not in this file — see Guardrails below).
+
+## Prediction & results log
+
+Predictions written *before* running an experiment, and their actual
+results (including misses), are logged in
+**[GitHub Discussions](../../discussions)**, not in this README. This is
+deliberate: a running discussion thread preserves the original prediction
+text and timestamp, so it can't be quietly edited after the fact to look
+more accurate than it was. Anything in this README's "established" table
+above should already be settled; anything still being tested belongs in
+Discussions first.
+
 ## Guardrails (so this doesn't drift)
 
 1. Any claim stronger than "we observed X numerically, reproducibly, in
@@ -80,7 +126,9 @@ proof within this project:
    independently-verifiable implementations (e.g. `ml_dtypes`, PyTorch
    ATen) rather than hand-built stand-ins for systems that can't actually
    be run and checked (e.g. nvfortran/CUDA in an environment with no GPU
-   and no network access to NVIDIA's SDK).
+   and no network access to NVIDIA's SDK) — and "independent" should be
+   checked, not assumed (see: TensorFlow's `bfloat16` turning out to be
+   bit-identical to `ml_dtypes`, i.e. not actually a separate data point).
 3. `machine-epsilon` / `default-tolerance` are currently **vendored**
    (copied as literals into `src/scheme/quiver.scm`), not a live
    `chicken-install` dependency on hatsu-yakitori's `core` egg — that egg
@@ -89,6 +137,18 @@ proof within this project:
 4. Every number quoted in a commit message, issue, or this README should
    be reproducible by running the corresponding Makefile target — no
    hand-transcribed or eyeballed figures.
+5. Two different kinds of numerical test belong in this project, and
+   they should not be confused with each other:
+   - **Expected-divergence experiments** (e.g. `observe-double-shuffle`):
+     a nonzero result is the interesting finding, and the question is
+     how it scales/behaves.
+   - **Bug oracles** (e.g. `check-heisenberg-relation`): built from an
+     identity that is proved to hold exactly with no rounding ambiguity
+     (e.g. inputs restricted to exactly-representable values like 0/1).
+     Any nonzero result here is a bug, full stop. When adding a new
+     Lean-proved identity as an oracle, prefer witnesses with this
+     "no legitimate rounding" property over ones that merely happen to
+     be small.
 
 ## Build & test
 
@@ -105,8 +165,16 @@ egg), Python 3.11+, `torch`, `numpy`, `pytest`.
 
 ```
 src/c/quiver_c23.c        C23 implementation of FP8 (E4M3) / BF16 quantization
-src/scheme/quiver.scm     Chicken Scheme driver: register machine, shuffle/
-                          stuffle divergence experiment, constant harvesting
+src/scheme/quiver.scm     Chicken Scheme driver: general NxN matrix engine,
+                          register machine, shuffle/stuffle divergence
+                          experiment, constant harvesting, Heisenberg-
+                          relation bug oracle
 python/quiver_sim.py      PyTorch (ATen) reference implementation
 tests/test_quiver.py      pytest suite
 ```
+
+`check-heisenberg-relation` in `src/scheme/quiver.scm` encodes a witness
+for `HatsuYakitori.HeisenbergCarabiner.heisenberg_relation`, proved in the
+sister repo's Lean4 development (no `sorry`). That Lean file is not
+vendored here; only the concrete 3×3 witness matrices and the identity
+they satisfy are reproduced.
