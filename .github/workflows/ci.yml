@@ -26,10 +26,10 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y gcc-13 g++-13 cmake make git chicken-bin
 
-      # Clone official repository and build CHICKEN 6
+      # Clone official repository and build CHICKEN Scheme
       - name: Install CHICKEN Scheme 6
         run: |
-          git clone --depth 1 https://git.call-cc.org/chicken-core
+          git clone --depth 1 https://code.call-cc.org/git/chicken-core.git
           cd chicken-core
           make PLATFORM=linux C_COMPILER=gcc-13
           sudo make PLATFORM=linux install
