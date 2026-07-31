@@ -20,16 +20,16 @@ jobs:
         with:
           python-version: '3.11'
 
-      # Install system build tools and dependencies
+      # Install system dependencies and bootstrap CHICKEN compiler
       - name: Install system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y gcc-13 g++-13 cmake make wget
+          sudo apt-get install -y gcc-13 g++-13 cmake make git chicken-bin
 
-      # Clone, compile, and install CHICKEN Scheme from repository
+      # Clone official repository and build CHICKEN 6
       - name: Install CHICKEN Scheme 6
         run: |
-          git clone --depth 1 https://github.com/chicken-scheme/chicken-core.git
+          git clone --depth 1 https://git.call-cc.org/chicken-core
           cd chicken-core
           make PLATFORM=linux C_COMPILER=gcc-13
           sudo make PLATFORM=linux install
