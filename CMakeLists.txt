@@ -43,7 +43,7 @@ set_target_properties(quiver_c23 PROPERTIES C_STANDARD 23)
 # 2. Transpile Chicken Scheme source into C using csc
 add_custom_command(
     OUTPUT ${CMAKE_BINARY_DIR}/quiver_scheme.c
-    COMMAND csc -to-stdout -emit-all-import-libraries ${CMAKE_CURRENT_SOURCE_DIR}/src/scheme/quiver.scm > ${CMAKE_BINARY_DIR}/quiver_scheme.c
+    COMMAND csc -to-stdout -emit-all-import-libraries ${CMAKE_CURRENT_SOURCE_DIR}/src/scheme/quiver.scm ${CMAKE_CURRENT_BINARY_DIR}/src/scheme/quiver-experiment.scm > ${CMAKE_BINARY_DIR}/quiver_scheme.c
     DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/src/scheme/quiver.scm ${CMAKE_CURRENT_SOURCE_DIR}/src/scheme/quiver-experiment.scm
     WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
     COMMENT "Transpiling Chicken Scheme to C..."
