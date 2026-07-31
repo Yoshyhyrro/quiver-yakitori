@@ -29,9 +29,9 @@ jobs:
       # Download and build CHICKEN Scheme 6 release tarball
       - name: Install CHICKEN Scheme 6
         run: |
-          wget https://code.call-cc.org/dev-snapshots/2024/05/26/chicken-6.0.0dev.tar.gz
-          tar -xzf chicken-6.0.0dev.tar.gz
-          cd chicken-6.0.0dev
+          wget https://code.call-cc.org/dev-snapshots/2026/05/12/chicken-6.0.0rc3.tar.gz
+          tar -xzf chicken-6.0.0rc3.tar.gz
+          cd chicken-6.0.0rc3
           CC=gcc-13 ./configure
           make
           sudo make install
