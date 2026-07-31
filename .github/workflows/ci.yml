@@ -14,54 +14,55 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # Configure Python runtime environment
+      # Provision Python runtime environment
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
-      # Install system dependencies and bootstrap compiler
+      # Resolve system dependencies and provision bootstrap compiler
       - name: Install system dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y gcc-13 g++-13 cmake make git chicken-bin
 
-      # Clone and build CHICKEN Scheme 6 from official repository
+      # Clone upstream repository and execute bootstrap compilation for CHICKEN Scheme
       - name: Install CHICKEN Scheme 6
         run: |
           git clone https://code.call-cc.org/git/chicken-core.git
           cd chicken-core
-          make PLATFORM=linux C_COMPILER=gcc-13
-          sudo make PLATFORM=linux install
+          make PLATFORM=linux C_COMPILER=gcc-13 CHICKEN=chicken boot-chicken
+          make PLATFORM=linux C_COMPILER=gcc-13 CHICKEN=./chicken-boot
+          sudo make PLATFORM=linux CHICKEN=./chicken-boot install
           sudo ldconfig
 
-      # Install required Scheme eggs
+      # Resolve CHICKEN Scheme extension dependencies
       - name: Install CHICKEN Scheme eggs
         run: |
           sudo chicken-install srfi-4 srfi-63
 
-      # Install Python dependencies
+      # Resolve Python package dependencies
       - name: Install Python dependencies
         run: |
           python -m pip install --upgrade pip
           pip install torch numpy pytest
 
-      # Configure C/Scheme bridge build via CMake
+      # Configure CMake build system for C/Scheme bridge
       - name: Configure CMake
         run: |
           cmake -B build -DCMAKE_C_COMPILER=gcc-13
 
-      # Compile C/Scheme library
+      # Compile C/Scheme shared library
       - name: Build C/Scheme library
         run: |
           cmake --build build
 
-      # Build Python extension via setup.py
+      # Compile Python native extension
       - name: Build Python extension
         run: |
           python setup.py build_ext --inplace
 
-      # Execute full integration test suite
+      # Execute cross-language integration test suite
       - name: Run integration test suite
         run: |
           make test-all
