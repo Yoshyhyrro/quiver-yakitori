@@ -40,19 +40,28 @@ include_directories(src/c)
 add_library(quiver_c23 SHARED src/c/quiver_c23.c)
 set_target_properties(quiver_c23 PROPERTIES C_STANDARD 23)
 
-# 2. Transpile CHICKEN Scheme source into C using csc
+# 2. Transpile CHICKEN Scheme sources into C separately
+# Compile the library module as a CHICKEN unit
 add_custom_command(
-    OUTPUT ${CMAKE_BINARY_DIR}/quiver_scheme.c
-    COMMAND csc -to-stdout -emit-all-import-libraries ${CMAKE_CURRENT_SOURCE_DIR}/src/scheme/quiver.scm ${CMAKE_CURRENT_SOURCE_DIR}/src/scheme/quiver-experiment.scm > ${CMAKE_BINARY_DIR}/quiver_scheme.c
-    DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/src/scheme/quiver.scm ${CMAKE_CURRENT_SOURCE_DIR}/src/scheme/quiver-experiment.scm
+    OUTPUT ${CMAKE_BINARY_DIR}/quiver_scheme_lib.c
+    COMMAND csc -t -unit quiver -emit-all-import-libraries ${CMAKE_CURRENT_SOURCE_DIR}/src/scheme/quiver.scm -o ${CMAKE_BINARY_DIR}/quiver_scheme_lib.c
+    DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/src/scheme/quiver.scm
     WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-    COMMENT "Transpiling CHICKEN Scheme to C..."
+    COMMENT "Transpiling CHICKEN Scheme library module into C source..."
 )
 
-# 3. Build executable target from transpiled Scheme wrapper
-add_executable(quiver_bridge ${CMAKE_BINARY_DIR}/quiver_scheme.c)
+# Compile the main experiment script, specifying that it uses the library unit
+add_custom_command(
+    OUTPUT ${CMAKE_BINARY_DIR}/quiver_scheme_main.c
+    COMMAND csc -t -uses quiver ${CMAKE_CURRENT_SOURCE_DIR}/src/scheme/quiver-experiment.scm -o ${CMAKE_BINARY_DIR}/quiver_scheme_main.c
+    DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/src/scheme/quiver-experiment.scm
+    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+    COMMENT "Transpiling CHICKEN Scheme main experiment into C source..."
+)
 
-# Apply csc compiler and linker flags to executable target
-target_compile_options(quiver_bridge PRIVATE ${CHICKEN_CFLAGS})
-target_link_options(quiver_bridge PRIVATE ${CHICKEN_LDFLAGS})
-target_link_libraries(quiver_bridge PRIVATE quiver_c23 ${CHICKEN_LIBS})
+# 3. Build executable target from transpiled Scheme wrappers
+# Link both generated C files together with the C23 bridge
+add_executable(quiver_bridge 
+    ${CMAKE_BINARY_DIR}/quiver_scheme_lib.c 
+    ${CMAKE_BINARY_DIR}/quiver_scheme_main.c
+)
