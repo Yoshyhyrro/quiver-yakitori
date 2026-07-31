@@ -33,7 +33,7 @@ execute_process(
 )
 separate_arguments(CHICKEN_LIBS UNIX_COMMAND "${CHICKEN_LIBS_STR}")
 
-# Register C header source path
+# Register standard C header source path
 include_directories(src/c)
 
 # 1. Compile C23 low-precision arithmetic library
@@ -41,7 +41,6 @@ add_library(quiver_c23 SHARED src/c/quiver_c23.c)
 set_target_properties(quiver_c23 PROPERTIES C_STANDARD 23)
 
 # 2. Transpile CHICKEN Scheme sources into C separately
-# Compile the library module as a CHICKEN unit
 add_custom_command(
     OUTPUT ${CMAKE_BINARY_DIR}/quiver_scheme_lib.c
     COMMAND csc -t -unit quiver -emit-all-import-libraries ${CMAKE_CURRENT_SOURCE_DIR}/src/scheme/quiver.scm -o ${CMAKE_BINARY_DIR}/quiver_scheme_lib.c
@@ -50,7 +49,6 @@ add_custom_command(
     COMMENT "Transpiling CHICKEN Scheme library module into C source..."
 )
 
-# Compile the main experiment script, specifying that it uses the library unit
 add_custom_command(
     OUTPUT ${CMAKE_BINARY_DIR}/quiver_scheme_main.c
     COMMAND csc -t -uses quiver ${CMAKE_CURRENT_SOURCE_DIR}/src/scheme/quiver-experiment.scm -o ${CMAKE_BINARY_DIR}/quiver_scheme_main.c
@@ -60,8 +58,13 @@ add_custom_command(
 )
 
 # 3. Build executable target from transpiled Scheme wrappers
-# Link both generated C files together with the C23 bridge
 add_executable(quiver_bridge 
     ${CMAKE_BINARY_DIR}/quiver_scheme_lib.c 
     ${CMAKE_BINARY_DIR}/quiver_scheme_main.c
 )
+
+# Set CHICKEN include path and apply compiler/linker flags
+target_include_directories(quiver_bridge PRIVATE /usr/local/include/chicken)
+target_compile_options(quiver_bridge PRIVATE ${CHICKEN_CFLAGS})
+target_link_options(quiver_bridge PRIVATE ${CHICKEN_LDFLAGS})
+target_link_libraries(quiver_bridge PRIVATE quiver_c23 ${CHICKEN_LIBS})
