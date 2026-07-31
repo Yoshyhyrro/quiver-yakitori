@@ -20,14 +20,24 @@ jobs:
         with:
           python-version: '3.11'
 
-      # Install system dependencies
+      # Install system build tools and dependencies
       - name: Install system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y gcc-13 g++-13 cmake make chicken-bin libchicken-dev
+          sudo apt-get install -y gcc-13 g++-13 cmake make wget
 
-      # Install Chicken Scheme dependencies
-      - name: Install Chicken Scheme eggs
+      # Download, compile, and install CHICKEN Scheme 6 from source
+      - name: Install CHICKEN Scheme 6
+        run: |
+          wget https://code.call-cc.org/releases/6.0.0/chicken-6.0.0.tar.gz
+          tar -xzf chicken-6.0.0.tar.gz
+          cd chicken-6.0.0
+          make PLATFORM=linux C_COMPILER=gcc-13
+          sudo make PLATFORM=linux install
+          sudo ldconfig
+
+      # Install CHICKEN Scheme eggs
+      - name: Install CHICKEN Scheme eggs
         run: |
           sudo chicken-install srfi-4 srfi-63
 
@@ -37,11 +47,12 @@ jobs:
           python -m pip install --upgrade pip
           pip install torch numpy pytest
 
-      # Configure and build CMake C23/Scheme bridge
+      # Configure CMake project
       - name: Configure CMake
         run: |
           cmake -B build -DCMAKE_C_COMPILER=gcc-13
 
+      # Build C/Scheme library
       - name: Build C/Scheme library
         run: |
           cmake --build build
@@ -51,9 +62,7 @@ jobs:
         run: |
           python setup.py build_ext --inplace
 
-      # Run the full cross-language integration suite (Scheme + pytest)
-      # via the Makefile. test-all already runs `pytest tests/ -v`
-      # (see test-python target), so no separate Python step is needed here.
+      # Execute full cross-language integration test suite
       - name: Run integration test suite
         run: |
           make test-all
