@@ -26,12 +26,11 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y gcc-13 g++-13 cmake make wget
 
-      # Download, compile, and install CHICKEN Scheme 6 from source
+      # Clone, compile, and install CHICKEN Scheme from repository
       - name: Install CHICKEN Scheme 6
         run: |
-          wget https://code.call-cc.org/releases/6.0.0/chicken-6.0.0.tar.gz
-          tar -xzf chicken-6.0.0.tar.gz
-          cd chicken-6.0.0
+          git clone --depth 1 https://github.org/chicken-scheme/chicken-core.git
+          cd chicken-core
           make PLATFORM=linux C_COMPILER=gcc-13
           sudo make PLATFORM=linux install
           sudo ldconfig
