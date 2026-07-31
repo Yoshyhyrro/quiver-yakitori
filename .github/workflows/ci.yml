@@ -14,28 +14,28 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # Install Python environment
+      # Configure Python runtime environment
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
-      # Install system dependencies and bootstrap CHICKEN compiler
+      # Install system build dependencies and bootstrap compiler
       - name: Install system dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y gcc-13 g++-13 cmake make git chicken-bin
 
-      # Clone official repository and build CHICKEN Scheme
+      # Clone and build CHICKEN Scheme from official Git repository
       - name: Install CHICKEN Scheme 6
         run: |
-          git clone --depth 1 https://code.call-cc.org/git/chicken-core.git
+          git clone https://code.call-cc.org/git/chicken-core.git
           cd chicken-core
           make PLATFORM=linux C_COMPILER=gcc-13
           sudo make PLATFORM=linux install
           sudo ldconfig
 
-      # Install CHICKEN Scheme eggs
+      # Install required Scheme eggs
       - name: Install CHICKEN Scheme eggs
         run: |
           sudo chicken-install srfi-4 srfi-63
@@ -46,12 +46,12 @@ jobs:
           python -m pip install --upgrade pip
           pip install torch numpy pytest
 
-      # Configure CMake project
+      # Configure C/Scheme bridge build via CMake
       - name: Configure CMake
         run: |
           cmake -B build -DCMAKE_C_COMPILER=gcc-13
 
-      # Build C/Scheme library
+      # Compile C/Scheme library
       - name: Build C/Scheme library
         run: |
           cmake --build build
@@ -61,7 +61,7 @@ jobs:
         run: |
           python setup.py build_ext --inplace
 
-      # Execute full cross-language integration test suite
+      # Execute full integration test suite
       - name: Run integration test suite
         run: |
           make test-all
